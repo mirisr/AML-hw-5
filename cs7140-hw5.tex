@@ -1,0 +1,707 @@
+\documentclass [12pt]{article}
+\usepackage{epsfig}
+\usepackage{amssymb, amstext}
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{verbatim}
+\usepackage[hyphens]{url}
+\usepackage{microtype}
+\usepackage{bm}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{minted}
+\usepackage{mdframed}
+
+\usepackage{charter}
+\usepackage[charter]{mathdesign}
+
+\hypersetup{%
+  colorlinks,
+  linkcolor={blue!80!black},
+  citecolor={blue!50!green},
+  urlcolor={red!70!gray}
+}
+
+\newlength{\toppush}
+\setlength{\toppush}{2\headheight}
+\addtolength{\toppush}{\headsep}
+
+  \setlength{\parindent}{0pt}
+  \setlength{\parskip}{\baselineskip}
+
+
+
+\setlength\topmargin{0in}
+\setlength\headheight{0in}
+\setlength\headsep{0in}
+\setlength\textheight{9in}
+\setlength\textwidth{6in}
+\setlength\oddsidemargin{0in}
+\setlength\evensidemargin{0in}
+
+\newcommand{\argmax}{\operatornamewithlimits{argmax}}
+\newcommand{\argmin}{\operatornamewithlimits{argmin}}
+\renewcommand{\v}[1]{\vec{#1}}
+\newcommand{\E}{\ensuremath{\mathbb{E}}}
+
+\newcommand{\htitle}[1]{\vspace*{3.25ex plus 1ex minus .2ex}%
+\begin{center}
+{\large\bf #1}
+\end{center}} 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\begin{center}
+\textbf{\large CS7140 Advanced Machine Learning -- Spring 2019\vspace{1mm} -- Homework 5}
+\end{center}
+
+\begin{framed}
+    \textbf{\large Submission Instructions}
+
+    Please submit your solutions as a PDF file. Preferably solutions are typed up in LaTeX. 
+    Use the following naming scheme
+    \begin{verbatim}
+        {firstname}_{lastname}_CS7140_HW5.pdf
+        {firstname}_{lastname}_CS7140_HW5_2c.ipynb
+    \end{verbatim}
+    \textbf{Due date: Fri 29 Mar}\\
+    \textbf{Submissions must be made via blackboard by 11.59pm on the due date!}
+\end{framed}
+
+\subsection*{Exercise 1: Stochastic Variational Inference in LDA (50 pts)}
+
+In this exercise we will derive the closed-form updates needed to perform stochastic variational inference in LDA. We will use $D$ to refer to the number of documents in the corpus, $V$ to refer to the number of words in the vocabulary and $K$ to refer to the number of topics. LDA then defines the generative model
+\begin{align*}
+	\beta_k 
+    &\sim 
+    \text{Dirichlet}(\eta_1, \ldots, \eta_V),
+    &
+    k &\in \{1, \ldots, K\},
+    \\
+    \theta_{d} 
+    &\sim 
+    \text{Dirichlet}(\alpha_1, \ldots, \alpha_K),
+    &
+    d &\in \{1, \ldots, D\},
+    \\
+    z_{d,n} 
+    &\sim 
+    \text{Discrete}(\theta_{d,1}, \ldots, \theta_{d,K}),
+    &
+    d &\in \{1, \ldots, D\}, n \in \{1, \ldots, N_d\},
+    \\
+    y_{d,n} \mid z_{d,n}\!=\!k
+    &\sim 
+    \text{Discrete}(\beta_{k,1}, \ldots, \beta_{k,V}),
+    &
+    d &\in \{1, \ldots, D\}, n \in \{1, \ldots, N_d\},
+\end{align*}
+This generative model defines a joint distribution
+\begin{align*}
+	p(y, z, \theta, \beta) 
+    = 
+	\left(
+    	\prod_{k=1}^K p(\beta_k ; \eta)
+    \right)
+	\left(
+    \prod_{d=1}^D
+    	p(\theta_d ; \alpha)
+    	\prod_{n=1}^{N_d}
+    	p(y_{d,n} \mid z_{d,n},\beta)
+        p(z_{d,n} \mid \theta_d)
+    \right)
+\end{align*}
+Stochastic variational inference learns a fully factorized variational approximation 
+\begin{align*}
+	q(z, \theta, \beta) &= 
+	\left(
+    	\prod_{k=1}^K q(\beta_k ; \lambda_k)
+    \right)
+	\left(
+    \prod_{d=1}^D
+    	q(\theta_d ; \gamma_d)
+    	\prod_{n=1}^{N_d}
+        q(z_{d,n} \mid \phi_{d,n})
+    \right),
+\end{align*}
+in which $q(z_{n,d} ; \phi_{n,d})$ is a discrete distribution, whereas both $q(\theta_d ; \gamma_d)$ and $q(\beta_k ; \lambda_k)$ are Dirichlet distribution. The objective of SVI is to maximize the evidence lower bound (ELBO)
+\begin{align*}
+	\mathcal{L}(\lambda,\gamma, \phi)
+    =
+    \E_{q(z,\theta,\beta)}
+    \left[
+    	\log 
+        \frac{p(y,z,\theta,\beta)}
+             {q(z, \theta, \beta)}
+    \right].
+\end{align*}
+We will derive the expression for the natural gradient of the ELBO with respect to $\lambda$
+\begin{align*}
+	\nabla_\lambda \mathcal{L}(\lambda)
+    =
+	\nabla_\lambda \max_{\phi, \gamma} \mathcal{L}(\lambda, \phi, \gamma). 
+\end{align*}
+In order to do so, we will first derive the procedure needed to maximize $\mathcal{L}$ with respect to $\phi$ and $\gamma$, after which we we will express the gradient in terms of $y$ and $\phi$.   
+\begin{itemize}
+\item[a.] To begin, let us decompose $\mathcal{L}$ into three terms
+\begin{align*}
+	\mathcal{L}(\lambda, \gamma, \phi)
+    = 
+    \E_{q(z,\theta,\beta)}
+    \left[
+    	\log 
+        \frac{p(y,z \mid  \theta, \beta)}
+             {q(z ; \phi)}
+    \right]
+    +
+    \E_{q(\theta)}
+    \left[
+    	\log 
+        \frac{p(\theta ; \alpha)}
+             {q(\theta ; \gamma)}
+    \right]
+    +
+    \E_{q(\beta)}
+    \left[
+    	\log 
+        \frac{p(\beta ; \eta)}
+             {q(\beta ; \lambda)}
+    \right]
+\end{align*}
+express these three components as sum over $d$, $n$, and $k$ 
+
+%---------------------------------------------
+
+
+
+\begin{align*}
+     = 
+    \sum_{k=1}^{K} \E_{q(\beta_k)}
+    \left[
+    	\log 
+        \frac{p(\beta_k ; \eta)}
+             {q(\beta_k ; \lambda_k)}
+    \right]
+    + 
+   \left(  \sum_{d=1}^{D} 
+    \E_{q(\theta_d)}
+    \left[
+    	\log 
+        \frac{p(\theta_d ; \alpha)}
+             {q(\theta_d ; \gamma_d)}
+    \right]
+    +
+    \sum_{n=1}^{N_d}
+    \E_{q(z_{d.n},\theta_d,\beta)}
+    \left[
+    	\log 
+        \frac{p(y_{d,n},z_{d,n} \mid  \theta_d, \beta)}
+             {q(z_{d,n} ; \phi_{d,n})}
+    \right] \right) 
+\end{align*}
+
+
+
+
+
+
+
+
+%---------------------------------------------------
+
+
+\item[b.] In order to perform SVI, we will need to compute expected values for the log parameters of a Dirichlet distribution. Recall that the density of the Dirichlet distribution is given by
+\begin{align*}
+	p(\theta ; \alpha) 
+    &= 
+    \frac{1}{B(\alpha)} \prod_{k=1}^K \theta_k^{\alpha_k - 1},
+    &
+    B(\alpha)
+    &= 
+    \frac{\prod_{k=1}^K \Gamma(\alpha_k)}{\Gamma \left( \sum_{k=1}^K \alpha_k \right)}
+    .
+\end{align*}
+Express the Dirichlet distribution as an exponential family form
+\begin{align*}
+	p(\theta ; \omega) = \exp \left( \omega^\top t(\theta) - a(\omega) \right).
+\end{align*}
+
+
+Relate $\omega$ to $\alpha$ and show that 
+\begin{align*}
+	\nabla_\omega a(\omega) = E_{p(\theta)}[t(\theta)]
+\end{align*}
+
+
+
+Use this identity to express the expected values of $\log \theta_k$ in terms of the so-called digamma function\textbf{} 
+\begin{align*}
+	\Psi(\alpha_k) = \frac{1}{\Gamma(\alpha_k)} \frac{d \Gamma(\alpha_k)}{d \alpha_k}.
+\end{align*}
+
+%----------------------------------------------------------------
+Exponential Family Form:
+\begin{align*}
+    p(\theta; \alpha) &= \exp{ \left( \left( \sum_{k=1}^K (\alpha_k -1 ) \log \theta_k\right) - \log B(\alpha) \right)}\\
+    t(\theta) &= \begin{bmatrix} \log{\theta_1} \\.\\.\\ \log{\theta_K}\end{bmatrix}
+\end{align*}
+
+
+\begin{align*}
+    a(\omega) &= \log B(\alpha) \\
+\end{align*}
+
+\begin{align*}
+        \begin{bmatrix} \omega_1 \\ . \\ . \\ \omega_K \end{bmatrix} &= \begin{bmatrix} \alpha_1 -1 \\ . \\ . \\ \alpha_K -1\end{bmatrix}
+\end{align*}
+
+Showing Identity:
+\begin{align*}
+    p(\theta;\omega) 
+        &= \exp\left[ \omega^T t(\theta) - a(\omega)\right]\\
+    \int d\theta p(\theta ; \alpha) 
+        &= 1 \\
+    \frac{\partial}{\partial \omega} a(\omega) 
+        &= \frac{\partial}{\partial \omega} \left[\log \int d\theta \exp \left(\omega^T t(\theta) \right)\right]\\
+        &= \frac{1}{\exp\left[ a(\omega)\right]} \int d\theta \exp \left(\omega^T t(\theta)\right) t(\theta) \\
+        &= \int d\theta p(\theta;\omega) t(\theta) \\
+        &= \mathbb{E}_{p(\theta;\omega)}\left[t(\theta)\right] 
+\end{align*}
+
+Expressing in terms of digamma function:
+
+\begin{align*}
+    	\nabla_\omega a(\omega) &= \nabla_\omega \left( \sum_{k=1}^K \log{\Gamma(\omega_k +1) - \log{\Gamma \left(\sum_{j=1}^K  \omega_j +1\right)}} \right) \\
+    	&= \sum_{k=1}^K \nabla_\omega \log{\Gamma(\omega_k +1) - \nabla_\omega \log{\Gamma \left(\sum_{j=1}^K  \omega_j +1\right)}}  \\
+    	&= \sum_{k=1}^K \frac{\Gamma' (\omega_k +1)}{\Gamma(\omega_k +1)} - \frac{\Gamma' (\sum_{j=1}^K  \omega_j +1)}{\Gamma(\sum_{j=1}^K  \omega_j +1)} \\
+\end{align*}
+
+For each k, we can write
+
+\begin{align*}
+    E[\log \theta_k | \omega] &= \Psi(\omega_k +1) - \Psi(\sum_{j=1}^K \omega_j + 1)
+\end{align*}
+
+
+%-----------------------------------------------------------------
+
+\item[c.] We will now derive the updates for the variational parameters $\phi_d$ and $\gamma_d$ for a single document, by solving for the VBEM updates
+\begin{align*}
+	\phi_{n,d} 
+    &= 
+    \argmax_{\phi_{n,d}} \mathcal{L}(\lambda, \gamma, \phi),
+    &
+	\gamma_d 
+    &= 
+    \argmax_{\gamma_d} \mathcal{L}(\lambda, \gamma, \phi).
+\end{align*}
+We perform these updates by defining the distributions $q(z_{d,n} ; \phi_{d,n})$ and $q(\theta_{d} ; \gamma_d)$ up to a constant of proportionality
+\begin{align*}
+	q(z_{d,n} ; \phi_{d,n})
+    &\propto
+    \exp 
+    \left(
+    E_{q(\theta_d) q(\beta)}
+    \left[
+    	\log p(y_{d,n}, z_{d,n} \mid \theta_d, \beta)
+    \right]
+    \right),
+    \\
+	q(\theta_{d} ; \gamma_d)
+    &\propto
+    \exp 
+    \left(
+    E_{q(z_d) q(\beta)}
+    \left[
+    	\log p(y_{d}, z_{d}, \theta_d \mid \beta)
+    \right]
+    \right).
+\end{align*}
+To derive the updates for $\phi_{n,d}$ and $\gamma_d$, you will need to make use of the result you derived above, as well as the fact that we can express the log joint of $y_{d}$ and $z_{d}$ as
+\begin{align*}
+	\log p(y_d, z_d, \mid \beta, \theta_d)
+    &= 
+    \sum_{n=1}^{N_d}
+    \sum_{v=1}^V
+    \sum_{k=1}^K
+    I[y_{d,n}=v]
+    I[z_{d,n}=k]
+	\left( 
+    	\log \beta_{k,v} + \log \theta_{d,k}
+    \right),
+\end{align*}
+and the density for $z_d$ under the variational distribution as
+\begin{align*}
+	\log q(z_{d,n} ; \phi_{d,n}) 
+    &= \sum_{k=1}^K I[z_{d,n}=k] \log \phi_{d,n,k}.
+\end{align*}
+
+%-----------------------------------------------------------
+Derivation for $\phi_{d,n}$
+%derive phi
+% \begin{align*}
+%     \sum_{k=1}^K I[z_{d,n}=k] \log \phi_{d,n,k} &\propto  E_{q(\theta_d) q(\beta)}
+%     \left[
+%     	\sum_{n=1}^{N_d}
+%         \sum_{v=1}^V
+%         \sum_{k=1}^K
+%         I[y_{d,n}=v]
+%         I[z_{d,n}=k]
+%     	\left( 
+%         	\log \beta_{k,v} + \log \theta_{d,k}
+%         \right)
+%     \right]
+% \end{align*}
+
+
+\begin{align*}
+     %\mathrm{for\ }n \in {1,...,N} \\
+    %\mathrm{for\ }k \in {1,...,K} \\
+   \log q(z_{d,n} ; \phi_{d,n})  &\propto  \sum_{n=1}^{N_d}
+    	\left(  E_{q(\theta_d) q(\beta)} \left[  \sum_{v=1}^V  \sum_{k=1}^K
+        I[y_{d,n}=v] I[z_{d,n}=k]\log \beta_{k,v} \right]  \\
+        &+  E_{q(\theta_d) q(\beta)}
+    \left[ \sum_{k=1}^K
+        I[z_{d,n}=k]\log \theta_{d,k}
+        \right)
+    \right] \\
+    %-----------------------------------------------
+     \log q(z_{d,n} ; \phi_{d,n})  &\propto  \sum_{n=1}^{N_d}
+        \sum_{v=1}^V
+        \sum_{k=1}^K
+        I[y_{d,n}=v]
+        I[z_{d,n}=k]
+    	\left( 
+        	 E_{q(\theta_d) q(\beta)}
+    \left[\log \beta_{k,v} \right]  +  E_{q(\theta_d) q(\beta)}
+    \left[\log \theta_{d,k}
+        \right)
+    \right] \\
+     %-----------------------------------------------
+     \log q(z_{d,n} = k ; \phi_{d,n}) &\propto 
+        \sum_{v=1}^V
+        I[y_{d,n}=v]
+    	 E_{q(\beta)}
+    \left[\log \beta_{k,v} \right]  +  E_{ q(\theta)}
+    \left[\log \theta_{d,k} \right] \\
+    %---------------------------------------------------
+     \log \phi_{d,n,k} &\propto 
+        \sum_{v=1}^V
+        I[y_{d,n}=v]
+    	 E_{q(\beta)}
+    \left[\log \beta_{k,v} \right]  +  E_{ q(\theta)}
+    \left[\log \theta_{d,k} \right] \\
+    %--------------------------------------------------
+     \phi_{d,n,k} &\propto \exp\left(
+        \sum_{v=1}^V
+        I[y_{d,n}=v]
+    	 E_{q(\beta)}
+    \left[\log \beta_{k,v} \right]  +  E_{ q(\theta)}
+    \left[\log \theta_{d,k} \right] \right)\\
+    %-------------------------------------------------
+    \phi_{d,n} &\propto \sum_{k=1}^K  I[z_{dn} = k] \exp\left(
+        \sum_{v=1}^V
+        I[y_{d,n}=v] (
+    	  \Psi(\sum_{l=1}^V \eta_{k,l}) \\
+     &+ \Psi(\eta_{k,v}) + \Psi(\sum_{j=1}^K \alpha_{d,j})
+     + \Psi(\alpha_{d,k})) \right)
+    %\Psi(\omega_k) - \Psi(\sum_{k=1}^K \omega_k)
+    %-----------------
+    % \phi_{d,n,k} &\propto \exp\left( \Psi(\lambda_{k,v}) - \Psi(\sum_{v=1}^V \lambda_{k,v}) + \Psi(\gamma_{d,k}) \right)\\
+\end{align*}
+
+
+Derivation for $\gamma_{d}$
+% now derive gamma
+\begin{align*}
+    q(\theta_{d} ; \gamma_d) &\propto \exp 
+    \left(
+    E_{q(z_d) q(\beta)}
+    \left[
+    	\log p(y_{d}, z_{d}, \theta_d \mid \beta)
+    \right]
+    \right)
+\end{align*}
+
+
+
+first term:
+% \begin{align*}
+%     \log p(\theta_d ; \gamma_d) &=\log \Gamma \left(\sum_{k=1}^K \gamma_{d,k} \right) - \sum_{k=1}^K \log \Gamma(\gamma_{d,k}) + \sum_{k=1}^K (\gamma_{d,k} -1)\log \theta_{d,k}  \\
+% \end{align*}
+
+\begin{align*}
+   \log p(\theta_{d}; \alpha) &=  \left( \sum_{k=1}^K (\alpha_{k} -1 ) \log \theta_{d,k}\right) - \log B(\alpha)
+\end{align*}
+
+% second term:
+\begin{align*}
+     \log q(\theta ; \gamma) &\propto  E_{q(z) q(\beta)} \left[
+        \sum_{d=1}^{D} \left( \log p(\theta_{d}) + \sum_{n=1}^{N} \log p(z_{d,n} | \theta_d) \right) 
+    \right]  \\
+    %---------------------------------------------
+    \log q(\theta; \gamma) &\propto  E_{q(z) q(\beta)} \left[
+        \sum_{d=1}^{D} \left( \left( \sum_{k=1}^K (\alpha_{k} -1 ) \log \theta_{d,k}\right) - \log B(\alpha_{d}) + \sum_{n=1}^{N} \log p(z_{d,n} | \theta_d) \right) 
+    \right] \\
+    %---------------------------------------------
+    \log q(\theta ; \gamma) &\propto  E_{q(z) q(\beta)} \left[
+        \sum_{d=1}^{D} \left( \left( \sum_{k=1}^K (\alpha_{k} -1 ) \log \theta_{d,k}\right) - \log B(\alpha_{d}) + \sum_{n=1}^{N} \sum_{k=1}^{K} I[z_{d,n} = k] \log \theta_{d,k} \right) \right]  \\
+    %---------------------------------------------
+    \log q(\theta ; \gamma) &\propto  E_{q(z)} \left[
+        \sum_{d=1}^{D} \sum_{n=1}^{N} \sum_{k=1}^{K} (I[z_{d,n} = k] +  (\alpha_{k} -1 ) ) \log \theta_{d,k} \right]  \\
+     %---------------------------------------------
+    \log q(\theta ; \gamma) &\propto  
+        \sum_{d=1}^{D} \sum_{k=1}^{K} \log \theta_{d,k} \sum_{n=1}^{N} E_{q(z)} \left[  (I[z_{d,n} = k] +  \alpha_{k} -1 )  \right]  \\
+    %---------------------------------------------
+     \log q(\theta_d) &\propto \sum_{k=1}^K \log \theta_{d,k} (\gamma_{d,k} -1) - a(\gamma_d)
+    %---------------------------------------------
+    \textrm{\ where\ }
+    \textrm{new\ natural\ params} \\ \gamma_{d,k} &=
+    \sum_{n=1}^{N} E_{q(z_d)} \left[  (I[z_{d,n} = k] +  \alpha_{k}) \right] \\
+    %------------------
+    \gamma_{d}  &= \sum_{k=1}^K \left( \sum_{n=1}^{N}  \phi_{d,n,k} +  \alpha_{k})  \right) \\
+    %------------------
+    \gamma_d  &=  \sum_{n=1}^{N}  \phi_{d,n} +  \sum_{k=1}^{K} \alpha_k 
+\end{align*}
+
+
+
+%-----------------------------------------------------------
+
+\item[d.] Write out the full VBEM update for the global parameters $\lambda_{k,v}$, by solving for
+\begin{align*}
+    q(\beta_k)
+	\propto 
+    \exp
+    \left(
+    	\E_{q(z)q(\theta)}[\log p(y, z, \theta, \beta)]
+    \right)
+\end{align*}%----------
+
+\begin{align*}
+    \log q(\beta_k) &\propto \E_{q(z)q(\theta)}\left[ \sum_{k=1}^K \log p(\beta_k) + \sum_{d=1}^D \sum_{n=1}^{N_d} \log p(y_{d,n} \mid z_{d,n}, \beta) \right] \\
+    %--------------------------------
+    \log q(\beta_k) &\propto \sum_{k=1}^K \E_{q(z)q(\theta)}\left[  \left( \sum_{v=1}^V (\eta_{v} -1 ) \log \beta_{k,v}\right)\right] + \sum_{d=1}^D \sum_{n=1}^{N_d} \E_{q(z)q(\theta)}\left[ \log p(y_{d,n} \mid z_{d,n}, \beta) \right] \\
+    %--------------------------------
+    \log q(\beta_k) &\propto \sum_{k=1}^K \E_{q(z)}\left[  \left( \sum_{v=1}^V (\eta_{v} -1 ) \log \beta_{k,v}\right)\right] \\ &+ \sum_{d=1}^D \sum_{n=1}^{N_d} \E_{q(z)}\left[ \sum_{v=1}^{V} \sum_{k=1}^{K} \log \beta_{k,v} I[z_{d,n} = k ] I[y_{d,n} = v] \right] \\
+    %--------------------------------
+    \log q(\beta_k) &\propto \sum_{k=1}^K \sum_{v=1}^V \log \beta_{k,v} \left( \E_{q(z)}\left[\eta_{v} -1 \right] + \sum_{d=1}^D \sum_{n=1}^{N_d} \E_{q(z)}\left[ I[z_{d,n} = k ] I[y_{d,n} = v] \right] \right) \\
+    %--------------------------------
+     \log q(\beta_k) &\propto \sum_{k=1}^K \sum_{v=1}^V \log \beta_{k,v} \sum_{d=1}^D \sum_{n=1}^{N_d}\left( \E_{q(z)}\left[\eta_{v} -1 +  I[z_{d,n} = k ] I[y_{d,n} = v] \right] \right) \\
+    %--------------------------------
+    \lambda_{k,v} &= \sum_{d=1}^D \sum_{n=1}^{N_d}\left( \E_{q(z)}\left[  I[z_{d,n} = k ] I[y_{d,n} = v] \right]\right) + \eta_{v} \\
+    %--------------------------------
+    \lambda_{k,v} &= \sum_{d=1}^D \sum_{n=1}^{N_d}\left( \phi_{d,n,k} \E_{q(z)}\left[ I[y_{d,n} = v] \right]\right) + \eta_{v} \\
+    %--------------------------------
+    \lambda_{k} &= \sum_{v=1}^{V} \sum_{d=1}^D \sum_{n=1}^{N_d}\left( \phi_{d,n,k} I[y_{d,n} = v] \right) + \eta 
+\end{align*}
+
+
+
+%-------------------------
+
+\item[e.] Express the gradient $\nabla_{\lambda_k} \mathcal{L}(\lambda, \phi, \gamma)$ in terms of the log normalizer
+    $a(\lambda_k)$ that you derived in exercise 1b. To do so, identify the subset of terms in the that have a non-zero
+    gradient, and make use of the identity $E_{q(\theta)}[t(\theta)] = \nabla_{\lambda_k} a(\lambda_k)$. 
+%------------------------------
+Let's write the ELBO of the $ \mathcal{L}$ in terms that only depend on $\beta_k$
+\begin{align*}
+    \mathcal{L}(\lambda, \phi, \gamma) &= \sum_{n=1}^N \sum_{d=1}^D \E_{q(z, \theta, \beta)}{ \log p(y_{dn} \mid z_{d,n} \beta)}  + \sum_{k=1}^K\E_{q(\beta)} \left[\log p(\beta_k ; \eta)\right] - \sum_{k=1}^K\E_{q(\beta)} \left[\log q(\beta_k ; \lambda_k)\right] \\
+    %------------------------------
+    %
+    %------------------------------
+\end{align*}
+Now we re-write each of the expectations.
+first expectation can be re-written as
+\begin{align*}
+    \sum_{n=1}^N \sum_{d=1}^D \E_{q(z, \theta, \beta)}{ \log p(y_{dn} \mid z_{d,n} \beta)} &= \sum^N_{n=1} \sum^D_{d=1} \E_{q(z, \beta)}\left[ \sum^V_{v=1} \log \beta_{k,v} I[y_{d,n} = v] \right] \\
+    %-------------------------
+    &= \sum_{n=1}^{N} \sum_{d=1}^D
+\sum_{v=1}^V I[y_{d,n} = v] \E_{q(z, \beta)} \log \beta_{k,v}  \\
+    %-------------------------
+    &= \sum_{n=1}^{N} \sum_{d=1}^D
+    \sum_{v=1}^V I[y_{d,n} = v] \frac{\partial a(\lambda_k)}{\partial \lambda_k}
+\end{align*}
+
+second expectation can be re-written as
+\begin{align*}
+    \sum_{k=1}^K\E_{q(\beta)} \left[\log p(\beta_k ; \eta)\right] &= \sum_{k=1}^K \E_{q(\beta)} \left[\sum_{v=1}^V (\eta_{k,v} -1) \log \beta_{k,v} - a(\eta_k) \right]
+\end{align*}
+
+third expectation can be re-written as
+\begin{align*}
+    \sum_{k=1}^K\E_{q(\beta)} \left[\log q(\beta_k ; \lambda_k)\right] &= \sum_{k=1}^K \E_{q(\beta)}\left[ \sum_{v=1}^V (\lambda_{k,v} -1) \log \beta_{k,v} - a(\lambda_k)\right]
+\end{align*}
+
+Now we write the derivatives 
+\begin{align*}
+    \nabla_{\lambda_k} &= \left( \nabla_{\lambda_{k,1}} \dots \nabla_{\lambda_{k,V}} \right) \\
+%------------------------
+    \nabla_{\lambda_{k,v}} \sum_{n=1}^N \sum_{d=1}^D \E_{q(z, \theta, \beta)}{ \log p(y_{dn} \mid z_{d,n} \beta)} &= 
+\end{align*}
+
+
+
+
+%------------------------------
+\item[f.] Finally derive the natural gradient 
+\begin{align*}
+	\hat{\nabla}_{\lambda_k} \mathcal{L}(\lambda, \phi, \gamma)
+    =
+    G(\lambda_k)^{-1}
+    \nabla_{\lambda_{k}}
+    \mathcal{L}(\lambda, \phi, \gamma)
+    ,
+\end{align*}
+relative to the metric defined by the Fisher information matrix of $q(\beta_k ; \lambda_k)$
+\begin{align*}
+	G(\lambda_k) 
+    = 
+    \E_{q(\beta_k ; \lambda_k)}
+    \left[
+    	\left(
+        	\nabla_{\lambda_k} \log q(\beta_k ; \lambda_k)
+        \right)
+    	\left(
+        	\nabla_{\lambda_k} \log q(\beta_k ; \lambda_k)
+        \right)^\top
+    \right].
+\end{align*}
+To do so, first prove the identity
+\begin{align*}
+	G(\lambda_k)
+    =
+	-\E_{q(\beta_k)}
+    \left[
+    	\frac{\partial^2 \log q(\beta_k ; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}}
+    \right],
+\end{align*}
+and then relate the expression above to the Hessian matrix of $a(\lambda_k)$.
+\end{itemize}
+
+\subsection*{Exercise 2: Black Box Variational Inference (50 pts)}
+
+As discussed in class, REINFORCE-style estimators tend to have a large variance. This is essentially the main reason
+that we need to be very careful about our optimizer hyperparameter settings. The authors of the Black Box Variational
+Inference paper proposed two methods to reduce the variance of this estimator: Control Variates and
+Rao-Blackwellization. Both methods replace the function for which we are computing an expectation with a different
+function that has the same expected value, but a different variance. We have already discussed control variates in
+class. In this exercise we will look at Rao-Blackwellization.
+
+\begin{itemize}
+\item[a.] Suppose we want to compute $\E\left[ J(X,Y) \right]$ the expected value of a function $J$ on two random variables $X, Y$. Suppose that $X$ and $Y$ are conditionally independent, which is to say that $p(x,y) = p(x)p(y)$. Show that the conditional expectation 
+\[
+	\hat{J}(X) = \E_{p(y)}\left[ J(X,Y) | X \right],
+\]
+has the following two properties
+\begin{align*}
+	\E_{p(x)}\left[ \hat{J}(X)\right] 
+    &= \E_{p(x,y)}\left[J(X,Y) \right],
+    \\
+    \text{Var}(\hat{J}(X)) 
+    &\leq \text{Var}(J(X,Y)).
+\end{align*}
+
+\item[b.] \textbf{(optional)} The result that you derived above shows that we can reduce the variance of an estimator by computing conditional expectations instead of joint expectations. This means that when two hidden variables are independent in the variational distribution, we can estimate the gradient w.r.t. their parameters separately.
+
+Suppose that we are using BBVI to learn a fully-factorized variational distribution (which is also known as a mean-field approximation of the posterior) 
+\begin{align*} 
+	q_{\lambda}(z) 
+    &= 
+    \prod_{i=1}^{n}q_{\lambda_{i}}(z_{i}),
+   &
+   \lambda 
+   &= 
+   \{ 
+     \lambda_{1}, \lambda_{2}, \ldots \lambda_{n} 
+   \}.
+\end{align*}
+We will simplify notation slightly by writing $q_{i}(x_i)$ as a shorthand for $q_{\lambda_{i}}(x_i)$. The evidence lower bound (ELBO) is now defined as
+\begin{align}
+	\mathcal{L}(\lambda)
+	&= 
+    \E_{q_{1}(z_{1})\cdots q_{n}(z_{n})}
+    \left[
+    	\log p(x,z) - \sum_{i=1}^{n} \log q_{i}(z_{i}) 
+    \right].
+\end{align}
+
+We will now derive a lower-variance estimator for the gradient derivative of the ELBO with w.r.t. ~the parameters
+$\lambda_{i}$ of the component $q_{\lambda_i}(z_i)$. 
+
+In the variational distribution, all $z_i$ are conditionally independent, but this is not true for the generative model $p(x,z)$. We will therefore make use of the so-called \emph{Markov Blanket}, which is the set of variables that are either parents of $z_i$, children of $z_i$, or parents of the children of $z_i$. If we use the notation $\textsc{pa}(i)$ to denote the parents of a variable , then we can defined the Markov blanket as 
+\begin{align*}
+    z_{(i)}
+    &=
+    \{
+    z_j : 
+    	j \in \textsc{pa}(i) 
+        ~\vee~
+        i \in \textsc{pa}(j)
+        ~\vee~
+        (\exists k: i \in \textsc{pa}(k) ~\wedge~ j \in \textsc{pa}(k))
+    \},\\
+	x_{(i)}
+    &=
+    \{
+    x_j : 
+        i \in \textsc{pa}(j)
+    \}.
+\end{align*}
+We can conversely define the set of variables that are \emph{not} in the Markov blanket as 
+\begin{align*}
+    z_{(-i)}
+    &=
+    z \setminus z_{(i)},
+    &
+    x_{(-i)}
+    &=
+    x \setminus x_{(i)}
+    .
+\end{align*}
+Informally, the Markov blanket defines the set of variables that \emph{influence} the probability of the $z_i$. More precisely put, $z_i$ is conditionally independent of all variables outside its Markov blanket, conditioned on the variables inside the Markov blanket,
+\begin{align*}
+	z_i \perp x_{(-i)}, z_{(-i)} ~|~ x_{(i)}, z_{(i)},
+\end{align*}
+Use this conditional independence relationship to derive the so-called \emph{Rao-Blackwellized} estimator for the gradient w.r.t. the parameters $\lambda_i$,
+\begin{align*}
+\nabla_{\lambda_i} \mathcal{L}(\lambda)
+&= 
+E_{q(z_{(i)})}
+\left[ 
+	\nabla_{\lambda_{i}} \log q_{i}(z_{i}) 
+    \left[ 
+    	\log p_i(x_{(i)},z_{(i)}) 
+        - 
+        \log q(z_{(i)}) 
+    \right] 
+\right] \\
+&\approx 
+\frac{1}{S} 
+\sum_{s=1}^{S}
+\nabla_{\lambda_{i}} 
+\log q_{i}(z_{i}^s)
+\left[ 
+	\log p_i(x_{(i)},z_{(i)}^s) 
+    - 
+    \log q(z_{(i)}^s) 
+\right] 
+\qquad 
+z_{(i)}^s \sim q_{(i)}(z_{(i)})
+\end{align*}
+Where $p_i(x_{(i)}, z_{(i)})$ refers to
+\begin{align*}
+	p_i(x_{(i)}, z_{(i)})
+    =
+    \prod_{x_j \in x_{(i)}}
+    p(x_j \mid \textsc{pa}(j))
+    \prod_{z_j \in z_{(i)}}
+    p(z_j \mid \textsc{pa}(j))
+    .
+\end{align*}
+
+\item[c. ] See the Jupyter notebook file. 
+\end{itemize}
+
+\end{document}
