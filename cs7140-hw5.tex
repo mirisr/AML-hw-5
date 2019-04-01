@@ -541,26 +541,34 @@ Now we write the derivatives
 
 1st derivative of the 1st term
 \begin{align*}
-    \nabla_{\lambda_k} &= \left( \nabla_{\lambda_{k,1}} \dots \nabla_{\lambda_{k,V}} \right) \\
+    % \nabla_{\lambda_k} &= \left( \nabla_{\lambda_{k,1}} \dots \nabla_{\lambda_{k,V}} \right) \\
 %------------------------
     \nabla_{\lambda_{k}} \sum_{n=1}^N \sum_{d=1}^D \E_{q(z, \theta, \beta)}{ \log p(y_{dn} \mid z_{d,n} \beta)} &=  \sum_{d=1}^D \sum_{n=1}^N \phi_{d,n,k} \sum_{v=1}^V I[y_{d,n} = v]  H^v(a(\lambda_k) )
 \end{align*}
 
 now of second term..
 \begin{align*}
-    \nabla_{\lambda_{k,u}} \E_{q(\beta)} \left[\log p(\beta_k ; \eta)\right] &= (\eta_{k,v} -1) H^{u,v} (a(\lambda_k))
+    \nabla_{\lambda_{k}} \E_{q(\beta)} \left[\log p(\beta_k ; \eta)\right] &= \sum_{v=1}^V (\eta_{k,v} -1) H^{v} (a(\lambda_k))
 \end{align*}
 
 third term
 \begin{align*}
-    \nabla_{\lambda_{k,u}}  \E_{q(\beta)} \left[\log q(\beta_k ; \lambda_k)\right] &= (\lambda_{k,v} -1) H^{u,v}(a(\lambda_k)) - \nabla_{\lambda_k} (a(\lambda_k))
+    \nabla_{\lambda_{k}} \E_{q(\beta)} \left[\log q(\beta_k ; \lambda_k)\right] &= \sum_{v=1}^V \left((\lambda_{k,v} -1) H^{v}(a(\lambda_k)) + e_v\frac{\partial a(\lambda_k)}{\partial \lambda_{k,v}} \right) - \nabla_{\lambda_k} (a(\lambda_k)) \\
+    %--------------------
+    &= \sum_{v=1}^V (\lambda_{k,v} -1) H^{v}(a(\lambda_k))
 \end{align*}
 
 Now putting everything together
 
 \begin{align*}
-    \nabla_{\lambda_{k,v}} \mathcal{L}(\lambda, \phi, \gamma) &= (\eta_{k,v} -1) H^{u,v} (a(\lambda_k)) - \left((\lambda_{k,v} -1) H^{u,v}(a(\lambda_k)) -  \nabla_{\lambda_k} (a(\lambda_k))  \right) \\
-    &= \sum_{d=1}^D \sum_{n=1}^N \phi_{d,n,k} \sum_{v=1}^V I[y_{d,n} = v]  H^{u,v}(a(\lambda_k) ) + H^{u,v} (\eta_{k,v} -\lambda_{k,v} ) - \nabla_{\lambda_k} (a(\lambda_k))
+    \nabla_{\lambda_{k}} \mathcal{L}(\lambda, \phi, \gamma) &= \sum_{k=1}^K (\eta_{k,v} -1) H^{v} (a(\lambda_k)) - \left((\lambda_{k,v} -1) H^{v}(a(\lambda_k)) -  \nabla_{\lambda_k} (a(\lambda_k))  \right) \\
+    %--------------------------------
+    &= \sum_{d=1}^D \sum_{n=1}^N \phi_{d,n,k} \sum_{v=1}^V I[y_{d,n} = v]  H^{v}(a(\lambda_k) ) + \sum_{v=1}^V H^{v}(a(\lambda_k) (\eta_{k,v} -\lambda_{k,v} )  \\
+    %-------------------------------
+    &= \sum_{d=1}^D \sum_{n=1}^N \phi_{d,n,k} \sum_{v=1}^V I[y_{d,n} = v]  H^{v}(a(\lambda_k) ) + H (a(\lambda_k)) (\eta_k -\lambda_k ) \\
+    % %-------------------------------
+    %  &= \sum_{d=1}^D \sum_{n=1}^N \phi_{d,n,k} \sum_{v=1}^V I[y_{d,n} = v]  H^{v}(a(\lambda_k) ) + H (a(\lambda_k)) (\eta_k -\lambda_k ) \\
+    % %-------------------------------
 \end{align*}
 %------------------------------
 \item[f.] Finally derive the natural gradient 
@@ -596,6 +604,45 @@ To do so, first prove the identity
     \right],
 \end{align*}
 and then relate the expression above to the Hessian matrix of $a(\lambda_k)$.
+
+
+%--------------part f -----------%
+
+\begin{align*}
+    \frac{\partial \log q(\beta_k ; \lambda_k)}{\partial \lambda_{k}} &= \log \beta_k  - \nabla_{\lambda_k} a(\lambda_k) \\
+    %------------------
+    G(\lambda_k) &= - \nabla_{\lambda_k} \otimes \nabla_{\lambda_k} a(\lambda_k) \\
+    G(\lambda_k) &= -H(a(\lambda_k))
+    %-------------------
+\end{align*}
+
+%------- proof -----
+\begin{align*}
+    \frac{\partial^2 \log q(\beta_k ; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} &= \frac{\partial}{\partial \lambda_{k,u} } \frac{\partial}{\partial \lambda_{k,v}} \log q(\beta; \lambda_k) \\
+    %-------------
+    &= \frac{\partial}{\partial \lambda_{k,u} }\left [ \frac{1}{q(\beta_k; \lambda_k)} \frac{\partial}{\partial \lambda_{k,v}} q(\beta_k; \lambda_k)\right] \\
+    %--------------------
+    &= - \frac{1}{q^2(\beta_k; \lambda_k)} \frac{\partial q(\beta_k; \lambda_k)}{\partial \lambda_{k,u}} \frac{\partial q(\beta_k; \lambda_k}{\partial \lambda_{k,v}} + \frac{1}{q(\beta_k; \lambda_k)} \frac{\partial^2 q(\beta_k; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \\
+    %--------------------
+    &= -\left[\frac{\partial }{\partial \lambda_{k,u}} \log q(\beta_k; \lambda_k)\right] \left[ \frac{\partial }{\partial \lambda_{k,v}} \log q(\beta_k; \lambda_k)\right] + \frac{1}{q(\beta_k; \lambda_k)} \frac{\partial^2 q(\beta_k; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \\
+    %----------
+    \E_{q(\beta_k; \lambda_k)} \left[ \frac{\partial^2 \log q(\beta_k ; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \right] &= - \E_{q(\beta_k; \lambda_k)} \left[\left[\frac{\partial }{\partial \lambda_{k,u}} \log q(\beta_k; \lambda_k)\right] \left[ \frac{\partial }{\partial \lambda_{k,v}} \log q(\beta_k; \lambda_k)\right]  \right] \\ &+ \E_{q(\beta_k; \lambda_k)} \left[ \frac{1}{q(\beta_k; \lambda_k)} \frac{\partial^2 q(\beta_k; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \right]  \\
+    %---------
+\end{align*}
+since 
+\begin{align*}
+     \E_{q(\beta_k; \lambda_k)} \left[ \frac{1}{q(\beta_k; \lambda_k)} \frac{\partial^2 q(\beta_k; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \right] &= \int d\beta_k q(\beta_k; \lambda_k) \left[ \frac{1}{q(\beta_k; \lambda_k)} \frac{\partial^2 q(\beta_k; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \right] \\
+     %----
+      &= \int d\beta_k \left[ \frac{\partial^2 q(\beta_k; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \right] \\
+      %-----
+      &= \frac{\partial}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \int d\beta_k q(\beta_k; \lambda_k) = 0
+\end{align*}
+
+\begin{align*}
+    -\E_{q(\beta_k; \lambda_k)} \left[ \frac{\partial^2 \log q(\beta_k ; \lambda_k)}{\partial \lambda_{k,u} \partial \lambda_{k,v}} \right] &= \E_{q(\beta_k; \lambda_k)} \left[\left[\frac{\partial }{\partial \lambda_{k,u}} \log q(\beta_k; \lambda_k)\right] \left[ \frac{\partial }{\partial \lambda_{k,v}} \log q(\beta_k; \lambda_k)\right]  \right] \\
+\end{align*}
+
+
 \end{itemize}
 
 \subsection*{Exercise 2: Black Box Variational Inference (50 pts)}
@@ -619,6 +666,19 @@ has the following two properties
     \\
     \text{Var}(\hat{J}(X)) 
     &\leq \text{Var}(J(X,Y)).
+\end{align*}
+
+Part 1
+\begin{align*}
+   \E_{p(x)}\left[ \hat{J}(X)\right] &= \E_{p(x)}\left[ \E_{p(y)}\left[ J(X, Y )\mid X \right]\right] \\
+   &= \int \int dx dy p(x) p(y) J(X,Y) \\
+   &= \int \int dx dy p(x, y) J(X,Y) \\
+   &= \E_{p(x,y)}\left[J(X,Y) \right]
+\end{align*}
+
+Part 2 
+\begin{align*}
+    \textrm{Var}\left[ \hat{J}(X) \right] = \E_{p(x)} \left[ \right]
 \end{align*}
 
 \item[b.] \textbf{(optional)} The result that you derived above shows that we can reduce the variance of an estimator by computing conditional expectations instead of joint expectations. This means that when two hidden variables are independent in the variational distribution, we can estimate the gradient w.r.t. their parameters separately.
