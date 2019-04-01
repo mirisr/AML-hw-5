@@ -515,13 +515,16 @@ Let's write the ELBO of the $ \mathcal{L}$ in terms that only depend on $\beta_k
 Now we re-write each of the expectations.
 first expectation can be re-written as
 \begin{align*}
-    \sum_{n=1}^N \sum_{d=1}^D \E_{q(z, \theta, \beta)}{ \log p(y_{dn} \mid z_{d,n} \beta)} &= \sum^N_{n=1} \sum^D_{d=1} \E_{q(z, \beta)}\left[ \sum^V_{v=1} \log \beta_{k,v} I[y_{d,n} = v] \right] \\
+    \sum_{n=1}^N \sum_{d=1}^D \E_{q(z, \theta, \beta)}{ \log p(y_{dn} \mid z_{d,n} \beta)} &= \sum^N_{n=1} \sum^D_{d=1} \E_{q(z, \beta)}\left[ \sum^V_{v=1} \log \beta_{k,v} I[y_{d,n} = v]I[z_{d,n} = k]\right] \\
     %-------------------------
     &= \sum_{n=1}^{N} \sum_{d=1}^D
-\sum_{v=1}^V I[y_{d,n} = v] \E_{q(z, \beta)} \log \beta_{k,v}  \\
-    %-------------------------
+\sum_{v=1}^V I[y_{d,n} = v] \E_{q(z, \beta)} \left[\log \beta_{k,v} I[z_{d,n} = k] \right] \\
+%-------------------------
     &= \sum_{n=1}^{N} \sum_{d=1}^D
-    \sum_{v=1}^V I[y_{d,n} = v] \frac{\partial a(\lambda_k)}{\partial \lambda_k}
+    \sum_{v=1}^V I[y_{d,n} = v] \E_{q( \beta)} \left[\log \beta_{k,v} \right]\E_{q(z)} \left[ I[z_{d,n} = k] \right] \\
+    %-------------------------
+    &= \sum_{n=1}^{N} \sum_{d=1}^D \phi_{d,n,k}
+    \sum_{v=1}^V I[y_{d,n} = v] \frac{\partial a(\lambda_{k})}{\partial \lambda_{k,v}}
 \end{align*}
 
 second expectation can be re-written as
@@ -535,15 +538,30 @@ third expectation can be re-written as
 \end{align*}
 
 Now we write the derivatives 
+
+1st derivative of the 1st term
 \begin{align*}
     \nabla_{\lambda_k} &= \left( \nabla_{\lambda_{k,1}} \dots \nabla_{\lambda_{k,V}} \right) \\
 %------------------------
-    \nabla_{\lambda_{k,v}} \sum_{n=1}^N \sum_{d=1}^D \E_{q(z, \theta, \beta)}{ \log p(y_{dn} \mid z_{d,n} \beta)} &= 
+    \nabla_{\lambda_{k}} \sum_{n=1}^N \sum_{d=1}^D \E_{q(z, \theta, \beta)}{ \log p(y_{dn} \mid z_{d,n} \beta)} &=  \sum_{d=1}^D \sum_{n=1}^N \phi_{d,n,k} \sum_{v=1}^V I[y_{d,n} = v]  H^v(a(\lambda_k) )
 \end{align*}
 
+now of second term..
+\begin{align*}
+    \nabla_{\lambda_{k,u}} \E_{q(\beta)} \left[\log p(\beta_k ; \eta)\right] &= (\eta_{k,v} -1) H^{u,v} (a(\lambda_k))
+\end{align*}
 
+third term
+\begin{align*}
+    \nabla_{\lambda_{k,u}}  \E_{q(\beta)} \left[\log q(\beta_k ; \lambda_k)\right] &= (\lambda_{k,v} -1) H^{u,v}(a(\lambda_k)) - \nabla_{\lambda_k} (a(\lambda_k))
+\end{align*}
 
+Now putting everything together
 
+\begin{align*}
+    \nabla_{\lambda_{k,v}} \mathcal{L}(\lambda, \phi, \gamma) &= (\eta_{k,v} -1) H^{u,v} (a(\lambda_k)) - \left((\lambda_{k,v} -1) H^{u,v}(a(\lambda_k)) -  \nabla_{\lambda_k} (a(\lambda_k))  \right) \\
+    &= \sum_{d=1}^D \sum_{n=1}^N \phi_{d,n,k} \sum_{v=1}^V I[y_{d,n} = v]  H^{u,v}(a(\lambda_k) ) + H^{u,v} (\eta_{k,v} -\lambda_{k,v} ) - \nabla_{\lambda_k} (a(\lambda_k))
+\end{align*}
 %------------------------------
 \item[f.] Finally derive the natural gradient 
 \begin{align*}
