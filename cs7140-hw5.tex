@@ -678,8 +678,9 @@ Part 1
 
 Part 2 
 \begin{align*}
-    \textrm{Var}\left[ \hat{J}(X) \right] = \E_{p(x)} \left[ \right]
+    \textrm{Var}\left[ \hat{J}(X) \right] &= \textrm{Var}(J(X,Y)) - \E\left[J(X,Y) - \hat{J}(X^2)\right]
 \end{align*}
+Thus, $\hat{J}(X)$ has lower variances than $J(X,Y)$
 
 \item[b.] \textbf{(optional)} The result that you derived above shows that we can reduce the variance of an estimator by computing conditional expectations instead of joint expectations. This means that when two hidden variables are independent in the variational distribution, we can estimate the gradient w.r.t. their parameters separately.
 
